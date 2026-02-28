@@ -1,0 +1,311 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ──────────────────────────────────────────────
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  SUSPENDED
+  CANCELLED
+}
+
+enum ContactMethod {
+  SMS
+  EMAIL
+  WEB_CHAT
+}
+
+enum MemberRole {
+  OWNER
+  PROVIDER
+  STAFF
+  CUSTOMER
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}
+
+enum ConfirmationType {
+  AUTO
+  MANUAL
+}
+
+enum CancelledBy {
+  CUSTOMER
+  PROVIDER
+  SYSTEM
+}
+
+enum ConversationChannel {
+  SMS
+  WEB_CHAT
+}
+
+enum ConversationStatus {
+  ACTIVE
+  CLOSED
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+  TOOL_RESULT
+}
+
+enum NotificationType {
+  BOOKING_CONFIRMATION
+  BOOKING_REMINDER
+  BOOKING_CANCELLED
+  BOOKING_UPDATED
+  WELCOME
+  CUSTOM
+}
+
+enum NotificationChannel {
+  SMS
+  EMAIL
+  WEB_CHAT
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+// ─── Models ─────────────────────────────────────────────
+
+model Business {
+  id                       String             @id @default(uuid()) @db.Uuid
+  name                     String
+  slug                     String             @unique
+  description              String?
+  timezone                 String             @default("America/New_York")
+  phone                    String?
+  email                    String?
+  address                  String?
+  logoUrl                  String?
+  subscriptionStatus       SubscriptionStatus @default(TRIAL)
+  trialEndsAt              DateTime?
+  autoConfirmBookings      Boolean            @default(false)
+  reminderLeadTimeMinutes  Int                @default(60)
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
+
+  memberships       BusinessMembership[]
+  serviceProviders   ServiceProvider[]
+  services          Service[]
+  availabilities    Availability[]
+  availabilityOverrides AvailabilityOverride[]
+  bookings          Booking[]
+  conversations     Conversation[]
+  notifications     Notification[]
+}
+
+model User {
+  id                     String        @id @default(uuid()) @db.Uuid
+  email                  String?       @unique
+  phone                  String?       @unique
+  firstName              String?
+  lastName               String?
+  avatarUrl              String?
+  preferredContactMethod ContactMethod @default(SMS)
+  otpHash                String?
+  otpExpiresAt           DateTime?
+  isVerified             Boolean       @default(false)
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+
+  memberships    BusinessMembership[]
+  providerProfiles ServiceProvider[]
+  bookings       Booking[]            @relation("CustomerBookings")
+  conversations  Conversation[]
+  notifications  Notification[]
+}
+
+model BusinessMembership {
+  id         String     @id @default(uuid()) @db.Uuid
+  userId     String     @db.Uuid
+  businessId String     @db.Uuid
+  role       MemberRole
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, businessId])
+  @@index([userId, role])
+}
+
+model ServiceProvider {
+  id          String  @id @default(uuid()) @db.Uuid
+  userId      String  @db.Uuid
+  businessId  String  @db.Uuid
+  displayName String
+  bio         String?
+  avatarUrl   String?
+  isActive    Boolean @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  providerServices      ProviderService[]
+  availabilities        Availability[]
+  availabilityOverrides AvailabilityOverride[]
+  bookings              Booking[]
+}
+
+model Service {
+  id              String  @id @default(uuid()) @db.Uuid
+  businessId      String  @db.Uuid
+  name            String
+  description     String?
+  durationMinutes Int
+  price           Decimal @db.Decimal(10, 2)
+  currency        String  @default("USD")
+  isActive        Boolean @default(true)
+  category        String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  business         Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  providerServices ProviderService[]
+  bookings         Booking[]
+}
+
+model ProviderService {
+  id                String   @id @default(uuid()) @db.Uuid
+  serviceProviderId String   @db.Uuid
+  serviceId         String   @db.Uuid
+  customPrice       Decimal? @db.Decimal(10, 2)
+  customDuration    Int?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  serviceProvider ServiceProvider @relation(fields: [serviceProviderId], references: [id], onDelete: Cascade)
+  service         Service        @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+}
+
+model Availability {
+  id                String  @id @default(uuid()) @db.Uuid
+  serviceProviderId String  @db.Uuid
+  businessId        String  @db.Uuid
+  dayOfWeek         Int     // 0-6, Sunday-Saturday
+  startTime         String  // HH:mm format
+  endTime           String  // HH:mm format
+  isAvailable       Boolean @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  serviceProvider ServiceProvider @relation(fields: [serviceProviderId], references: [id], onDelete: Cascade)
+  business        Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([serviceProviderId, dayOfWeek])
+}
+
+model AvailabilityOverride {
+  id                String   @id @default(uuid()) @db.Uuid
+  serviceProviderId String   @db.Uuid
+  businessId        String   @db.Uuid
+  date              DateTime @db.Date
+  startTime         String?  // HH:mm format
+  endTime           String?  // HH:mm format
+  isBlocked         Boolean  @default(true)
+  reason            String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  serviceProvider ServiceProvider @relation(fields: [serviceProviderId], references: [id], onDelete: Cascade)
+  business        Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+}
+
+model Booking {
+  id                 String          @id @default(uuid()) @db.Uuid
+  businessId         String          @db.Uuid
+  customerId         String          @db.Uuid
+  serviceProviderId  String          @db.Uuid
+  serviceId          String          @db.Uuid
+  startTime          DateTime        @db.Timestamptz()
+  endTime            DateTime        @db.Timestamptz()
+  status             BookingStatus   @default(PENDING)
+  confirmationType   ConfirmationType @default(MANUAL)
+  cancellationReason String?
+  cancelledBy        CancelledBy?
+  notes              String?
+  reminderSentAt     DateTime?       @db.Timestamptz()
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  business        Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customer        User            @relation("CustomerBookings", fields: [customerId], references: [id], onDelete: Cascade)
+  serviceProvider ServiceProvider @relation(fields: [serviceProviderId], references: [id], onDelete: Cascade)
+  service         Service         @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  notifications   Notification[]
+
+  @@index([businessId, serviceProviderId, startTime])
+  @@index([customerId, status])
+}
+
+model Conversation {
+  id         String             @id @default(uuid()) @db.Uuid
+  userId     String             @db.Uuid
+  businessId String             @db.Uuid
+  channel    ConversationChannel
+  twilioSid  String?
+  status     ConversationStatus @default(ACTIVE)
+  context    Json?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@index([userId, channel, status])
+}
+
+model Message {
+  id             String      @id @default(uuid()) @db.Uuid
+  conversationId String      @db.Uuid
+  role           MessageRole
+  content        String
+  toolCalls      Json?
+  channel        ConversationChannel
+  createdAt      DateTime    @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id         String             @id @default(uuid()) @db.Uuid
+  userId     String             @db.Uuid
+  businessId String             @db.Uuid
+  bookingId  String?            @db.Uuid
+  type       NotificationType
+  channel    NotificationChannel
+  content    String
+  sentAt     DateTime?          @db.Timestamptz()
+  status     NotificationStatus @default(PENDING)
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  booking  Booking?  @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+}
