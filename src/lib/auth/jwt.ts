@@ -1,4 +1,4 @@
-import jwt from "jsonwebtoken";
+import jwt, { SignOptions } from "jsonwebtoken";
 
 const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret-do-not-use";
 
@@ -17,16 +17,16 @@ export function createAccessToken(
   userId: string,
   expiresIn: string = ACCESS_TOKEN_EXPIRY
 ): string {
-  return jwt.sign({ userId, type: "access" }, JWT_SECRET, { expiresIn });
+  const options: SignOptions = { expiresIn: expiresIn as any };
+  return jwt.sign({ userId, type: "access" } as object, JWT_SECRET, options);
 }
 
 /**
  * Create a long-lived refresh token (7 days)
  */
 export function createRefreshToken(userId: string): string {
-  return jwt.sign({ userId, type: "refresh" }, JWT_SECRET, {
-    expiresIn: REFRESH_TOKEN_EXPIRY,
-  });
+  const options: SignOptions = { expiresIn: REFRESH_TOKEN_EXPIRY as any };
+  return jwt.sign({ userId, type: "refresh" } as object, JWT_SECRET, options);
 }
 
 /**
@@ -34,7 +34,7 @@ export function createRefreshToken(userId: string): string {
  */
 export function verifyAccessToken(token: string): TokenPayload | null {
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as TokenPayload;
+    const payload = jwt.verify(token, JWT_SECRET) as TokenPayload & jwt.JwtPayload;
     if (payload.type !== "access") return null;
     return payload;
   } catch {
@@ -47,7 +47,7 @@ export function verifyAccessToken(token: string): TokenPayload | null {
  */
 export function verifyRefreshToken(token: string): TokenPayload | null {
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as TokenPayload;
+    const payload = jwt.verify(token, JWT_SECRET) as TokenPayload & jwt.JwtPayload;
     if (payload.type !== "refresh") return null;
     return payload;
   } catch {
