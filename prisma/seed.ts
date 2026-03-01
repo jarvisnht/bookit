@@ -1,5 +1,9 @@
 import { PrismaClient } from "@prisma/client";
-import { hashOtp } from "../src/lib/auth/otp";
+import bcryptjs from "bcryptjs";
+
+async function hashOtp(otp: string): Promise<string> {
+  return bcryptjs.hash(otp, 10);
+}
 
 const prisma = new PrismaClient();
 
