@@ -21,7 +21,7 @@ export default function HomePage() {
               Start Free Trial
             </Link>
             <Link
-              href="/marks-barbershop"
+              href="/fresh-cuts"
               className="bg-white text-blue-600 px-8 py-3 rounded-lg font-medium hover:bg-gray-50 transition border border-blue-200"
             >
               See Demo →

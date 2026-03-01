@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && prisma migrate deploy && next build",
+    "postbuild": "prisma db seed",
     "start": "next start",
     "lint": "eslint",
     "seed": "ts-node prisma/seed.ts",
